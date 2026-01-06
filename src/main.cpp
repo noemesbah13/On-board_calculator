@@ -1,4 +1,4 @@
-#include <Adafruit_NeoPixel.h>
+/*#include <Adafruit_NeoPixel.h>
  
 #define RGB_PIN     48      // Broche de la led RGB
 #define NUM_PIXELS  1       // Une seule led présente
@@ -9,6 +9,7 @@ Adafruit_NeoPixel pixel(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
 
 #define SCREEN_WIDTH 128 // Largeur de l'écran OLED en pixels
 #define SCREEN_HEIGHT 64 // Hauteur de l'écran OLED en pixels
@@ -35,6 +36,42 @@ void setup() {
   Serial.println(F("Wire.begin est termine"));
     // initialisation de l'écran OLED
   display.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDRESS);
+  display.clearDisplay();
+  display.setCursor(5,5);
+  display.setTextColor(WHITE, BLACK);
+  display.setTextSize(2);
+  display.setTextWrap(true);
+  display.print("ca depend du montant du cheque");
+  double t=millis();
+  while (millis()<t+18){digitalWrite(2,LOW);}
+  digitalWrite(2,HIGH);
+  int tab[40];
+  // lecture de la réponse
+  // détection du signal
+  t=micros();
+  while (micros()<t+80) {
+    if (digitalRead(2) == HIGH) {
+      Serial.print("kaput");
+    }
+  }
+  t=micros();
+  while (micros()<t+80) {
+    if (digitalRead(2) == LOW) {
+      Serial.print("kaput");
+    }
+  }
+
+  for (int i=0;i<40;i++) {
+    while (digitalRead(2)==LOW){}
+    t=micros();
+    while (digitalRead(2)==HIGH){}
+    tab[0]=micros()-t;
+  }
+  for (int i=0;i<40;i++) {
+    Serial.print(tab[i]);
+  }
+  display.print("Fini");
+
 
   // Affiche le buffer original vers l'écran
   // la librairie initialise le buffer avec un logo adafruit.
@@ -49,9 +86,12 @@ void loop() {
   // Convertie HSV en RGB
   uint32_t color = pixel.gamma32(pixel.ColorHSV(hue));
   pixel.setPixelColor(0, color);
+  
+  
   pixel.show();
  
   hue += 256; // Pas d'incrémentation (plus petit plus fluide)
   delay(20);  // Ajuster la durée entre les pas
   Serial.println("Hello Everyone!");
 }
+*/
