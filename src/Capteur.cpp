@@ -9,7 +9,11 @@ Adafruit_NeoPixel pixel(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_NeoPixel.h>
+#include <WiFi.h>
+#include <tinyxml2.h>
 
+using namespace tinyxml2;
 
 #define SCREEN_WIDTH 128 // Largeur de l'écran OLED en pixels
 #define SCREEN_HEIGHT 64 // Hauteur de l'écran OLED en pixels
@@ -21,6 +25,19 @@ Adafruit_NeoPixel pixel(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 
 //Instance de l'écran SSD1306
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+bool wifiConnect=false;
+
+// Replace with your own network credentials
+const char* ssid = "TP_INSA";
+const char* password = "TP_INSA_3A";
+
+void connecteHandler(WiFiEvent_t wifi_event, WiFiEventInfo_t wifi_info) {
+  wifiConnect=true;
+}
+
+void deconnecteHandler(WiFiEvent_t wifi_event, WiFiEventInfo_t wifi_info) {
+  wifiConnect=false;
+}
 
 void setup() {
   //Initialisation de la led
@@ -43,9 +60,36 @@ void setup() {
   display.setTextWrap(true);
   // Affiche le buffer original vers l'écran
   // la librairie initialise le buffer avec un logo adafruit.
+  display.print("Bonjour !");
   display.display();
 
-  return;
+  // ----------- configuration du WI-FI ------------------------------
+  IPAddress local_IP(192, 168, 12, 6); // Your Desired Static IP Address
+  IPAddress subnet(255, 255, 255, 0);
+  IPAddress gateway(192, 168, 12, 254);
+     // Configures Static IP Address
+   if (!WiFi.config(local_IP, gateway, subnet))
+   {
+       Serial.println("Configuration Failed!");
+   }
+    WiFi.mode(WIFI_STA);
+    WiFi.onEvent(connecteHandler,ARDUINO_EVENT_WIFI_STA_CONNECTED);
+    WiFi.onEvent(deconnecteHandler,ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+
+    WiFi.begin(ssid, password);
+    Serial.println("\nConnecting to WiFi Network ..");
+    // Print network settings assigned by the DHCP
+    Serial.println("\nConnected to the WiFi network");
+    Serial.print("Local ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Subnet Mask: " );
+    Serial.println(WiFi.subnetMask());
+    Serial.print("Gateway IP: ");
+    Serial.println(WiFi.gatewayIP());
+    Serial.print("DNS 1: ");
+    Serial.println(WiFi.dnsIP(0));
+    Serial.print("DNS 2: ");
+    Serial.println(WiFi.dnsIP(1));
 }
 int tab[40]; // Tableau de valeur de temps
 
@@ -69,7 +113,7 @@ void lecture() {
     tab[i]=micros()-t;
   }
   for (int i=0;i<40;i++) {
-    Serial.println(tab[i]);
+    //.println(tab[i]);
   }
 }
 
@@ -93,16 +137,89 @@ void construction() {
   }
 }
 
+void statutWifi(bool connecte) {
+  if (connecte){
+    display.setCursor(5,0);
+    display.setTextSize(1);
+    display.print("Online");
+    display.setTextSize(2);
+  }
+  if (!connecte){
+    display.setCursor(5,0);
+    display.setTextSize(1);
+    display.print("Offline");
+    display.setTextSize(2);
+  }
+}
 
 void loop() {
+  static uint16_t hue = 0;
+    tabVal[0]=0;
+    tabVal[1]=0;
+    tabVal[2]=0;
+    tabVal[3]=0;
+    tabVal[4]=0;
     delay(5000);
     lecture();
     delay(100);
     calcul();
     delay(100);
+    //---------------------Création du fichier XML----------------------------
     construction();
+    XMLDocument doc;
+    XMLElement* root = doc.NewElement("soapenv:Envelope");
+    doc.InsertFirstChild(root);
+    root->SetAttribute("xmlns:soapenv", "http://schemas.xmlsoap.org/soap/envelope/");
+    root->SetAttribute("xmlns:tp", "http://tp.insa");
+    XMLElement* child1 = doc.NewElement("soapenv:Header");
+    root->InsertEndChild(child1);
+    XMLElement* child2 = doc.NewElement("soapenv:Body");
+    root->InsertEndChild(child2);
+    XMLElement* child3 = doc.NewElement("tp:Request1");
+    child2->InsertEndChild(child3);
+    child3->SetAttribute("id","6");
+    XMLElement* child4 = doc.NewElement("Data");
+    child3->InsertEndChild(child4);
+    child4->SetAttribute("temperature",tabVal[0]);
+    child4->SetAttribute("humidity",tabVal[2]);
+
+    XMLPrinter printer;
+    doc.Print(&printer);
+    Serial.println (printer.CStr());
+    //--------------------------------------------------------------------------
+
+
+
     delay(500);
-    Serial.println("\n");
-    for (int i = 0;i<5;i++){Serial.println(tabVal[i]);tabVal[i]=0;}
+    display.clearDisplay();
+    delay(500);
+    statutWifi(wifiConnect);
+    display.setTextSize(2);
+    if (tabVal[4] == tabVal[0]+tabVal[1]+tabVal[2]+tabVal[3]) {
+        display.setCursor(5,25);
+        display.print("T : ");
+        display.print(tabVal[2]);
+        display.print(",");
+        display.print(tabVal[3]);
+        display.print(" C");
+        display.setCursor(5,45);
+        display.print("H : ");
+        display.print(tabVal[0]);
+        display.print(",");
+        display.print(tabVal[1]);
+        display.print(" %");
+        display.display();
+        if (tabVal[2] < 18) {hue = 43690;}
+        else if (tabVal[2] >= 25) {hue = 0;}
+        else hue = 21845;
+        uint32_t color = pixel.gamma32(pixel.ColorHSV(hue));
+        pixel.setPixelColor(0, color);
+        pixel.show();
+        display.display();// A continuer ici
+    } else {
+        Serial.println("Checksum ERREUR");
+        pixel.setPixelColor(0, pixel.Color(255, 0, 0));
+    }
+    
     
 }
