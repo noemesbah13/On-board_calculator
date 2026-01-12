@@ -12,6 +12,7 @@ Adafruit_NeoPixel pixel(NUM_PIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 #include <Adafruit_NeoPixel.h>
 #include <WiFi.h>
 #include <tinyxml2.h>
+#include <HTTPClient.h>
 
 using namespace tinyxml2;
 
@@ -30,9 +31,11 @@ bool wifiConnect=false;
 // Replace with your own network credentials
 const char* ssid = "TP_INSA";
 const char* password = "TP_INSA_3A";
+const char* serverName = "http://192.168.12.100:8080/SendData";
 
 void connecteHandler(WiFiEvent_t wifi_event, WiFiEventInfo_t wifi_info) {
   wifiConnect=true;
+  
 }
 
 void deconnecteHandler(WiFiEvent_t wifi_event, WiFiEventInfo_t wifi_info) {
@@ -180,12 +183,74 @@ void loop() {
     child3->SetAttribute("id","6");
     XMLElement* child4 = doc.NewElement("Data");
     child3->InsertEndChild(child4);
-    child4->SetAttribute("temperature",tabVal[0]);
-    child4->SetAttribute("humidity",tabVal[2]);
+    child4->SetAttribute("temperature",tabVal[2]+(tabVal[3]/10.0));
+    child4->SetAttribute("humidity",tabVal[0]+(tabVal[1]/10.0));
 
     XMLPrinter printer;
     doc.Print(&printer);
-    Serial.println (printer.CStr());
+    WiFiClient client;
+    HTTPClient http;
+    http.begin(client, serverName);
+    String httpRequestData = printer.CStr();
+    http.addHeader("Content-Type", "text/xml;charset=UTF-8");
+    http.addHeader("SOAPAction", "SendDataAction");
+    // Envoi de la requête HTTP POST
+    int httpResponseCode = http.POST(httpRequestData);
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    String payload = http.getString();
+    Serial.println(payload);
+    XMLDocument receptionDoc;
+    auto blue = 0;
+    auto green = 0;
+    auto red = 0;
+    if (httpResponseCode == 200)
+    {
+      receptionDoc.Parse(payload.c_str());
+      Serial.println("XML parsed successfully");
+      XMLElement *pEnveloppe, *pBody, *pResponse1, *pData;
+      pEnveloppe = receptionDoc.FirstChildElement("soapenv:Envelope");
+      if (pEnveloppe)
+      {
+        pBody = pEnveloppe->FirstChildElement("soapenv:Body");
+      }
+      else
+      {
+        Serial.println("kaput 1");
+      }
+      if (pBody)
+      {
+        pResponse1 = pBody->FirstChildElement("tp:Response1");
+      }
+      else
+      {
+        Serial.println("kaput 2");
+      }
+      if (pResponse1)
+      {
+        pData = pResponse1->FirstChildElement("Data");
+      }
+      else
+      {
+        Serial.println("kaput 3");
+      }
+      if (pData)
+      {
+        red = pData->UnsignedAttribute("red");
+        green = pData->UnsignedAttribute("green");
+        blue = pData->UnsignedAttribute("blue");
+      }
+      else
+      {
+        Serial.println("Pas de Data");
+      }
+    }
+
+    Serial.println(red);
+    Serial.println(green);
+    Serial.println(blue);
+    http.end();
+
     //--------------------------------------------------------------------------
 
 
@@ -209,16 +274,14 @@ void loop() {
         display.print(tabVal[1]);
         display.print(" %");
         display.display();
-        if (tabVal[2] < 18) {hue = 43690;}
-        else if (tabVal[2] >= 25) {hue = 0;}
-        else hue = 21845;
-        uint32_t color = pixel.gamma32(pixel.ColorHSV(hue));
-        pixel.setPixelColor(0, color);
         pixel.show();
-        display.display();// A continuer ici
+        pixel.setBrightness(100);
+        display.display();
+        pixel.setPixelColor(0, pixel.Color(red, green, blue));
     } else {
         Serial.println("Checksum ERREUR");
         pixel.setPixelColor(0, pixel.Color(255, 0, 0));
+        pixel.setBrightness(100);
     }
     
     
